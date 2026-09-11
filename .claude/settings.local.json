@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(timeout 60 google-chrome --headless=new --no-sandbox --disable-gpu --virtual-time-budget=11000 --dump-dom http://localhost:8090/test-harness.html)",
+      "Read(//tmp/**)",
+      "Bash(python3 -)",
+      "Bash(pdftoppm -png -r 62 -f 3 -l 3 EMG_Imar_Tanitim_TR.pdf __TRACKED_VAR__/w3)",
+      "Bash(pdftoppm -png -r 62 -f 4 -l 4 EMG_Imar_Tanitim_TR.pdf __TRACKED_VAR__/w4)",
+      "Bash(pdftoppm -png -r 62 -f 6 -l 6 EMG_Imar_Tanitim_TR.pdf __TRACKED_VAR__/w6)"
+    ]
+  }
+}

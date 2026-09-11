@@ -1,0 +1,1 @@
+Resmi marka logolarını (izinli) buraya koyun: lafarge.png, akcansa.png, cimsa.png, eca.png, vitra.png, kale.png, kalekim.png, weber.png, basf.png, sika.png, filli-boya.png, dyo.png, marshall.png, izocam.png, ytong.png, knauf.png, peri.png, bosch.png (png/svg/jpg). Konulduğunda katalog otomatik kullanır.

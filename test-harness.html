@@ -1,0 +1,110 @@
+<!DOCTYPE html><html lang="tr"><head><meta charset="UTF-8"><title>TEST</title>
+<link rel="stylesheet" href="css/style.css"></head>
+<body>
+<div id="root"></div>
+<div id="RESULT" style="position:fixed;z-index:9999;background:#000;color:#0f0;padding:20px;font:14px monospace;white-space:pre">running...</div>
+<script src="js/i18n.js"></script>
+<script src="js/store.js"></script>
+<script src="js/contracts.js"></script>
+<script src="js/app.js"></script>
+<script>
+(function(){
+  const log=[]; let fail=0;
+  function run(name, fn){ try{ fn(); log.push('PASS '+name); }catch(e){ fail++; log.push('FAIL '+name+' :: '+(e&&e.message)+' | '+(e&&e.stack||'').split('\n')[1]); } }
+
+  // Ensure fresh DB
+  ['sahapro_db_v1','sahapro_db_v2','sahapro_db_v3','sahapro_session_v1'].forEach(k=>localStorage.removeItem(k)); localStorage.removeItem(DB_KEY);
+  run('Store.load', ()=>Store.load());
+  run('projects have area', ()=>{ const bad=Store.projects().filter(p=>!(p.area>0)); if(bad.length) throw new Error(bad.length+' without area'); const en=Store.projects().find(p=>p.name.indexOf('En Residence')>=0); if(en.area!==59000) throw new Error('EN area='+en.area); });
+  run('fmtTLlong tr', ()=>{ setLang('tr'); if(fmtTLlong(415000000)!=='415 Milyon TL') throw new Error(fmtTLlong(415000000)); if(fmtTLlong(185000000)!=='185 Milyon TL') throw new Error(fmtTLlong(185000000)); if(fmtTLlong(1250000000)!=='1,25 Milyar TL') throw new Error(fmtTLlong(1250000000)); });
+  run('analysis shows Milyon TL + m2', ()=>{ App.user=null; renderPublic('home'); const t=document.body.innerText; if(t.indexOf('Milyon TL')<0) throw new Error('no Milyon TL'); if(t.indexOf('m²')<0) throw new Error('no m2'); });
+  run('seed integrity', ()=>{ if(Store.projects().length!==41) throw new Error('projects='+Store.projects().length); if(Store.projects().filter(p=>p.status==='devam').length!==5) throw new Error('ongoing!=5'); if(!Store.materials().length) throw new Error('materials'); if(!PHASES.length) throw new Error('phases'); });
+  run('emg users', ()=>{ if(!Store.authenticate('murat@emgimar.com','1234')) throw new Error('murat'); if(!Store.authenticate('fatih@emgimar.com','1234')) throw new Error('fatih'); });
+  run('ongoing page filter', ()=>{ App.user=Store.authenticate('murat@emgimar.com','1234'); renderApp(); go('ongoing'); const cards=document.querySelectorAll('.proj-card').length; if(cards!==5) throw new Error('ongoing cards='+cards); });
+  run('completed page filter', ()=>{ go('completed'); const cards=document.querySelectorAll('.proj-card').length; if(cards!==36) throw new Error('completed cards='+cards); });
+  run('materialStatus', ()=>{ const s=Store.materialStatus(Store.materials()[0]); if(!['yeterli','eksik','kritik'].includes(s)) throw new Error(s); });
+  run('missingMaterials', ()=>{ if(!Array.isArray(Store.missingMaterials())) throw new Error('x'); });
+  run('projectWbs', ()=>{ const w=Store.projectWbs('p1'); if(Object.keys(w).length!==PHASE_SUBS.length) throw new Error('wbs count '+Object.keys(w).length); });
+
+  const roles={yetkili:'murat@emgimar.com', muhendis:'fatih@emgimar.com', calisan:'usta@emgimar.com'};
+  const pages=['dashboard','ongoing','completed','projects','tasks','calendar','materials','employees','attendance','contracts','reports','settings'];
+
+  Object.entries(roles).forEach(([role,email])=>{
+    run('login '+role, ()=>{ App.user=Store.authenticate(email,'1234'); if(!App.user) throw new Error('auth'); renderApp(); });
+    pages.forEach(pg=> run(role+':'+pg, ()=>{ go(pg); if(!document.getElementById('content')&&pg!=='dashboard'){} }));
+    run(role+':projectDetail', ()=>{ go('projectDetail','p1'); });
+    ['genel','asamalar','gorevler','malzeme','ekip'].forEach(t=> run(role+':tab:'+t, ()=>{ App._detailTab=t; go('projectDetail','p1'); }));
+  });
+
+  // Modals & actions (as yetkili)
+  App.user=Store.authenticate(roles.yetkili,'1234'); renderApp();
+  run('openProjectModal new', ()=>{ openProjectModal(); closeModal(); });
+  run('openProjectModal edit', ()=>{ openProjectModal('p1'); closeModal(); });
+  run('openTaskModal new', ()=>{ openTaskModal(); closeModal(); });
+  run('openTaskModal edit', ()=>{ openTaskModal('t1'); closeModal(); });
+  run('openTaskDetail', ()=>{ openTaskDetail('t1'); closeModal(); });
+  run('openMaterialModal new', ()=>{ openMaterialModal(); closeModal(); });
+  run('openMaterialModal edit', ()=>{ openMaterialModal('m1'); closeModal(); });
+  run('openEmployeeModal', ()=>{ openEmployeeModal(); closeModal(); });
+  run('openNotifications', ()=>{ openNotifications(); closeModal(); });
+  run('toggleWbs', ()=>{ go('projectDetail','p1'); toggleWbs('p1','s4c'); });
+  run('add material', ()=>{ const b=Store.materials().length; saveMaterialTest(); if(Store.materials().length!==b+1) throw new Error('not added'); });
+  function saveMaterialTest(){ openMaterialModal(); document.getElementById('matName').value='Test Çimento'; document.getElementById('matReq').value='10'; document.getElementById('matStock').value='2'; saveMaterial(''); }
+  run('exportMissing', ()=>{ exportMissing(); closeModal(); });
+  run('contracts page', ()=>{ App.user=Store.authenticate(roles.yetkili,'1234'); renderApp(); go('contracts'); if(document.querySelectorAll('.card').length < CONTRACTS.length) throw new Error('cards'); if(CONTRACTS.length!==8) throw new Error('count='+CONTRACTS.length); });
+  run('open contract modal', ()=>{ openContract('kaba'); if(!document.getElementById('clauseList')) throw new Error('no clauses'); if(!document.getElementById('ctEmployer')) throw new Error('no fields'); closeModal(); });
+  run('contract text fills placeholders', ()=>{ openContract('demir'); document.getElementById('ctEmployer').value='Test İşveren A.Ş.'; const txt=contractPlainText('demir'); if(txt.indexOf('{')>=0) throw new Error('unfilled placeholder'); if(txt.indexOf('Test İşveren')<0) throw new Error('employer missing'); if(txt.indexOf('TARAFLAR')<0) throw new Error('no clauses'); closeModal(); });
+  run('quote has service field', ()=>{ App.user=null; App.quoteSent=false; renderPublic('quote'); if(!document.getElementById('qService')) throw new Error('no service select'); if(document.body.innerText.indexOf('Hizmetlerimiz')<0 && document.body.innerText.toUpperCase().indexOf('SERVICES')<0 && document.body.innerText.indexOf('خدمات')<0 && document.body.innerText.indexOf('Услуги')<0) throw new Error('no services section'); });
+  run('requests screen', ()=>{ App.user=Store.authenticate(roles.yetkili,'1234'); renderApp(); if(!Store.quotes().length) Store.addQuote({name:'Q',phone:'0555',service:'Metraj'}); if(!Store.applications().length) Store.addApplication({name:'A',phone:'0555',appType:'Usta'}); go('requests'); if(document.querySelectorAll('table.tbl tbody tr').length<1) throw new Error('no quote rows'); setReqTab('apps'); if(document.querySelectorAll('table.tbl tbody tr').length<1) throw new Error('no app rows'); setReqTab('quotes'); });
+  run('requests toggle+delete', ()=>{ const q=Store.quotes()[0]; toggleQuote(q.id); if(!Store.quotes().find(x=>x.id===q.id).handled) throw new Error('not handled'); const before=Store.applications().length; const a=Store.applications()[0]; Store.deleteApplication(a.id); if(Store.applications().length!==before-1) throw new Error('not deleted'); });
+  run('requests nav badge staff only', ()=>{ App.user=Store.authenticate(roles.calisan,'1234'); const items=navItems(); if(items.some(i=>i.id==='requests')) throw new Error('worker sees requests'); App.user=Store.authenticate(roles.yetkili,'1234'); if(!navItems().some(i=>i.id==='requests')) throw new Error('admin no requests'); });
+  run('brochure gate captures lead', ()=>{ App.user=null; renderPublic('home'); openBrochureGate(); if(!document.getElementById('broForm')) throw new Error('no gate form'); document.getElementById('broName').value='Ahmet Yatırımcı'; document.getElementById('broPhone').value='05551239988'; document.getElementById('broCompany').value='ABC Yapı'; const before=Store.leads().length; submitBrochure(new Event('submit')); if(Store.leads().length!==before+1) throw new Error('lead not stored'); if(Store.leads()[0].name!=='Ahmet Yatırımcı') throw new Error('name'); });
+  run('leads tab in requests', ()=>{ App.user=Store.authenticate(roles.yetkili,'1234'); renderApp(); go('requests'); setReqTab('leads'); if(document.querySelectorAll('table.tbl tbody tr').length<1) throw new Error('no lead rows'); const l=Store.leads()[0]; toggleLead(l.id); if(!Store.leads().find(x=>x.id===l.id).handled) throw new Error('toggle fail'); });
+  run('contact has 4 flag catalogs', ()=>{ App.user=null; setLang('tr'); renderPublic('contact'); const flags=document.querySelectorAll('.bro-flag'); if(flags.length!==4) throw new Error('flags='+flags.length); });
+  run('brochure lang selection', ()=>{ setLang('en'); openBrochureGate('ar'); if(App._broLang!=='ar') throw new Error('lang not set'); if(BROCHURE_FILES.ar.indexOf('AR')<0) throw new Error('file map'); document.getElementById('broName').value='X'; document.getElementById('broPhone').value='05550000000'; const b=Store.leads().length; submitBrochure(new Event('submit')); if(Store.leads().length!==b+1) throw new Error('lead'); if(Store.leads()[0].lang.indexOf('عرب')<0) throw new Error('lang stored='+Store.leads()[0].lang); setLang('tr'); });
+
+  // i18n: her dilde tüm sayfaları render et
+  run('i18n keys parity', ()=>{ const base=Object.keys(I18N.tr); ['en','ar','ru'].forEach(lg=>{ const miss=base.filter(k=>!(k in I18N[lg])); if(miss.length) throw new Error(lg+' missing: '+miss.slice(0,5).join(',')); }); });
+  ['tr','en','ar','ru'].forEach(lg=>{
+    run('lang '+lg+' auth', ()=>{ setLang(lg); App.user=null; renderAuth(); if(!document.getElementById('loginForm')) throw new Error('no form'); });
+    run('lang '+lg+' app', ()=>{ App.user=Store.authenticate(roles.yetkili,'1234'); renderApp(); pages.forEach(pg=>go(pg)); go('projectDetail','p1'); });
+    run('lang '+lg+' L()', ()=>{ if(!L('dashboard')) throw new Error('empty'); });
+  });
+  run('rtl dir set', ()=>{ setLang('ar'); if(document.documentElement.dir!=='rtl') throw new Error('dir'); setLang('tr'); });
+
+  // Halka açık site (login olmadan)
+  run('public boot no-session', ()=>{ App.user=null; renderPublic('home'); if(!document.querySelector('.pub-hero')) throw new Error('no hero'); });
+  run('hero says Türkiye', ()=>{ setLang('tr'); renderPublic('home'); if(document.querySelector('.pub-hero h1').innerText.indexOf('Türkiye')<0) throw new Error('no Türkiye'); });
+  run('public analysis section', ()=>{ renderPublic('home'); const t=document.body.innerText; if(t.indexOf('Proje Analizleri')<0) throw new Error('no analysis'); if(t.indexOf('Toplam Portföy')<0) throw new Error('no portfolio'); });
+  run('public ongoing cards+analysis', ()=>{ renderPublic('ongoing'); const n=document.querySelectorAll('.proj-card').length; if(n!==5) throw new Error('ongoing='+n); if(document.body.innerText.toUpperCase().indexOf('BAZINDA')<0) throw new Error('no analysis on ongoing'); });
+  run('public completed cards+analysis', ()=>{ renderPublic('completed'); const n=document.querySelectorAll('.proj-card').length; if(n!==36) throw new Error('completed='+n); if(document.body.innerText.toUpperCase().indexOf('BAZINDA')<0) throw new Error('no analysis on completed'); });
+  run('public contact', ()=>{ renderPublic('contact'); if(!document.querySelector('.pub-contact')) throw new Error('no contact'); if(document.body.innerText.indexOf('859 13 64')<0) throw new Error('no phone'); });
+  run('public quote form', ()=>{ App.quoteSent=false; renderPublic('quote'); if(!document.getElementById('quoteForm')) throw new Error('no form'); if(!document.querySelector('.pub-steps')) throw new Error('no steps'); });
+  run('submit quote', ()=>{ App.quoteSent=false; renderPublic('quote'); document.getElementById('qName').value='Test Müşteri'; document.getElementById('qPhone').value='05551112233'; const before=Store.quotes().length; submitQuote(new Event('submit')); if(Store.quotes().length!==before+1) throw new Error('not stored'); if(!App.quoteSent) throw new Error('no success'); if(document.body.innerText.indexOf('Alındı')<0 && document.body.innerText.toUpperCase().indexOf('RECEIVED')<0 && document.body.innerText.indexOf('استلام')<0 && document.body.innerText.indexOf('получена')<0) throw new Error('no success msg'); });
+  run('quote reset on nav', ()=>{ renderPublic('home'); if(App.quoteSent) throw new Error('not reset'); });
+  run('public career form', ()=>{ App.careerSent=false; renderPublic('career'); if(!document.getElementById('careerForm')) throw new Error('no form'); });
+  run('submit application', ()=>{ App.careerSent=false; renderPublic('career'); document.getElementById('cName').value='Usta Ali'; document.getElementById('cPhone').value='05559998877'; const b=Store.applications().length; submitApplication(new Event('submit')); if(Store.applications().length!==b+1) throw new Error('not stored'); if(!App.careerSent) throw new Error('no success'); });
+  run('career reset on nav', ()=>{ renderPublic('home'); if(App.careerSent) throw new Error('not reset'); });
+  ['tr','en','ar','ru'].forEach(lg=> run('pub extra lang '+lg, ()=>{ setLang(lg); App.user=null; ['quote','career','tracking'].forEach(pg=>{App.quoteSent=false;App.careerSent=false;renderPublic(pg);}); })); setLang('tr');
+
+  // Proje takibi + üyelik + erişim yetkisi
+  run('public tracking page', ()=>{ App.user=null; renderPublic('tracking'); if(document.body.innerText.toUpperCase().indexOf('PROJE TAKIB')<0 && document.body.innerText.indexOf('Takib')<0) throw new Error('no tracking'); if(document.querySelectorAll('table.tbl tbody tr').length!==5) throw new Error('rows'); });
+  run('register member', ()=>{ const before=Store.users().length; const r=Store.register({name:'Yeni Üye',email:'yeni@test.com',pass:'1234',phone:'05550001122'}); if(r.error) throw new Error('reg failed'); if(r.user.role!=='uye') throw new Error('role'); if(Store.users().length!==before+1) throw new Error('count'); });
+  run('register dup rejected', ()=>{ const r=Store.register({name:'X',email:'yeni@test.com',pass:'1',phone:''}); if(!r.error) throw new Error('dup allowed'); });
+  run('member no access by default', ()=>{ const uye=Store.authenticate('uye@emgimar.com','1234'); if(!uye) throw new Error('no member'); if(Store.canViewProject('p1',uye.id)) throw new Error('should not access'); if(Store.projectsForUser(uye.id).length!==0) throw new Error('has projects?'); });
+  run('grant then access', ()=>{ const uye=Store.userById('u11'); Store.grantAccess('p1',uye.id); if(!Store.canViewProject('p1',uye.id)) throw new Error('grant failed'); if(Store.projectsForUser(uye.id).length!==1) throw new Error('count!=1'); Store.revokeAccess('p1',uye.id); if(Store.canViewProject('p1',uye.id)) throw new Error('revoke failed'); });
+  run('member app view', ()=>{ App.user=Store.authenticate('uye@emgimar.com','1234'); renderApp(); if($('#pageTitle')&&false){} go('mytracking'); if(!document.querySelector('.proj-grid') && document.body.innerText.indexOf('atanmış')<0) throw new Error('member view broken'); });
+  run('member detail gated', ()=>{ App.user=Store.userById('u11'); renderApp(); go('projectDetail','p2'); if(document.body.innerText.toUpperCase().indexOf('YETKINIZ')<0 && document.body.innerText.indexOf('erişim')<0 && document.body.innerText.indexOf('access')<0) throw new Error('not gated'); });
+  run('admin grant via tab', ()=>{ App.user=Store.authenticate('murat@emgimar.com','1234'); renderApp(); toggleAccess('p2','u11',true); if(!Store.canViewProject('p2','u11')) throw new Error('admin grant failed'); });
+  run('member sees granted detail', ()=>{ App.user=Store.userById('u11'); renderApp(); go('projectDetail','p2'); if(!document.querySelector('.detail-head')) throw new Error('detail not shown'); });
+  run('engineer limited access', ()=>{ const fatih=Store.authenticate('fatih@emgimar.com','1234'); const mine=Store.projects().filter(p=>Store.canViewProject(p.id,fatih.id)).length; const all=Store.projects().length; if(mine>=all) throw new Error('engineer sees all? '+mine+'/'+all); if(mine===0) throw new Error('engineer sees none'); });
+  run('public login flow', ()=>{ renderPublic('home'); pubLogin(); if(!document.getElementById('loginForm')) throw new Error('no login form'); });
+  run('openPublicProject', ()=>{ renderPublic('home'); openPublicProject('p1'); if(!document.getElementById('modalBack')) throw new Error('no modal'); closeModal(); });
+  ['tr','en','ar','ru'].forEach(lg=> run('public lang '+lg, ()=>{ setLang(lg); App.user=null; ['home','ongoing','completed','contact'].forEach(pg=>renderPublic(pg)); }));
+  setLang('tr');
+
+  document.getElementById('RESULT').textContent = (fail? 'FAILURES: '+fail+'\n':'ALL PASS ('+log.length+')\n') + log.filter(l=>l.startsWith('FAIL')).join('\n');
+  document.title = fail? 'TEST_FAIL_'+fail : 'TEST_OK_'+log.length;
+})();
+</script>
+</body></html>

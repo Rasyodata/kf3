@@ -1,0 +1,15 @@
+{
+  "name": "EMG İmar — İnşaat Proje & Saha Yönetimi",
+  "short_name": "EMG İmar",
+  "description": "EMG İmar Müh. İnş. — taahhüt işleri, saha görevleri, ekip ve puantaj takibi.",
+  "start_url": "index.html",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#0f1720",
+  "theme_color": "#ff7a18",
+  "lang": "tr",
+  "categories": ["business", "productivity"],
+  "icons": [
+    { "src": "assets/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}
