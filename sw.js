@@ -1,5 +1,5 @@
 /* EMG İmar — Service Worker (network-first; güncellemeler anında görünür) */
-const CACHE = 'emgimar-v4';
+const CACHE = 'emgimar-v5';
 const ASSETS = [
   'index.html', 'css/style.css',
   'js/i18n.js', 'js/store.js', 'js/contracts.js', 'js/app.js',

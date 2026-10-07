@@ -711,10 +711,7 @@ function renderAuth() {
             <label>${L('email')}</label>
             <input type="email" id="email" placeholder="ornek@emgimar.com" value="murat@emgimar.com" autocomplete="username">
           </div>
-          <div class="field">
-            <label>${L('password')}</label>
-            <input type="password" id="pass" placeholder="••••••" value="1234" autocomplete="current-password">
-          </div>
+          <p class="muted" style="font-size:12.5px;margin:-4px 0 4px">${L('login_nopass')}</p>
           <div class="auth__error" id="loginErr"></div>
           <button type="submit" class="btn btn--primary btn--block">${L('login_btn')}</button>
         </form>
@@ -739,10 +736,10 @@ function renderAuth() {
   } else {
     $('#loginForm').addEventListener('submit', (e) => {
       e.preventDefault();
-      doLogin($('#email').value, $('#pass').value);
+      doLogin($('#email').value);
     });
     $$('.auth__roles button').forEach(b => b.addEventListener('click', () => {
-      doLogin(b.dataset.em, '1234');
+      doLogin(b.dataset.em);
     }));
   }
 }
@@ -763,16 +760,17 @@ function doRegister() {
   renderApp();
 }
 
-function doLogin(email, pass) {
-  const u = Store.authenticate(email, pass);
-  if (!u) { const e = $('#loginErr'); if (e) e.textContent = 'E-posta veya parola hatalı. (demo parola: 1234)'; return; }
+function doLogin(email) {
+  const u = Store.authenticate(email);
+  if (!u) { const e = $('#loginErr'); if (e) e.textContent = L('login_notfound'); return; }
   Store.setSession(u.id);
   App.user = u;
+  App.route = null; // her girişte rolün varsayılan sayfasından başla
   renderApp();
   toast(`Hoş geldiniz, ${u.name.split(' ')[0]}!`);
 }
 
-function logout() { Store.clearSession(); App.user = null; renderPublic('home'); }
+function logout() { Store.clearSession(); App.user = null; App.route = null; renderPublic('home'); }
 
 /* ============================================================
    UYGULAMA İSKELETİ
@@ -796,6 +794,7 @@ function navItems() {
       { id: 'completed', icon: '✅', label: L('nav_completed') },
       { id: 'projects',  icon: '🏗️', label: L('all_projects_nav') },
       { grp: L('g_finance') },
+      { id: 'finance',   icon: '💳', label: L('nav_finance') },
       { id: 'contracts', icon: '📄', label: L('contracts') },
       { id: 'reports',   icon: '📈', label: L('reports') },
       { id: 'materials', icon: '📦', label: L('materials') },
@@ -909,6 +908,7 @@ function go(route, param = null) {
     settings: [L('settings'), L('s_settings')],
     requests: [L('requests'), L('s_requests')],
     contracts: [L('contracts'), L('s_contracts')],
+    finance: [L('nav_finance'), L('s_finance')],
     mytracking: [L('member_area'), L('track_sub')],
     projectDetail: ['', ''],
   };
@@ -926,6 +926,7 @@ function go(route, param = null) {
     tasks: renderTasks, calendar: renderCalendar, materials: renderMaterials, employees: renderEmployees,
     attendance: renderAttendance, reports: renderReports, settings: renderSettings,
     contracts: renderContracts, requests: renderRequests, mytracking: renderMemberTracking,
+    finance: renderFinance,
     projectDetail: renderProjectDetail,
   }[route];
   (render || renderDashboard)();
@@ -1927,6 +1928,76 @@ function renderReports() {
           }).join('')}</tbody>
         </table></div>
       </div></div>`;
+}
+
+/* ============================================================
+   FİNANS & ÖDEMELER (Muhasebe)
+   ============================================================ */
+App._finDir = 'all';     // all | in | out
+App._finStatus = 'all';  // all | odendi | bekliyor
+function setFinDir(d) { App._finDir = d; renderFinance(); }
+function setFinStatus(s) { App._finStatus = s; renderFinance(); }
+
+function renderFinance() {
+  const role = App.user.role;
+  if (role !== 'muhasebe' && role !== 'yetkili') { go('dashboard'); return; } // muhasebeye özel (yetkili de görebilir)
+  const pays = Store.payments();
+  const sum = (arr) => arr.reduce((s, p) => s + p.amount, 0);
+  const collected = sum(pays.filter(p => p.dir === 'in' && p.status === 'odendi'));
+  const paidOut   = sum(pays.filter(p => p.dir === 'out' && p.status === 'odendi'));
+  const pendingIn = sum(pays.filter(p => p.dir === 'in' && p.status === 'bekliyor'));
+  const pendingOut= sum(pays.filter(p => p.dir === 'out' && p.status === 'bekliyor'));
+  const net = collected - paidOut;
+
+  let list = pays.slice().sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0)); // tarih azalan
+  if (App._finDir !== 'all') list = list.filter(p => p.dir === App._finDir);
+  if (App._finStatus !== 'all') list = list.filter(p => p.status === App._finStatus);
+
+  const dirBadge = (d) => d === 'in'
+    ? `<span class="badge badge--green"><span class="d"></span>Tahsilat</span>`
+    : `<span class="badge badge--yellow"><span class="d"></span>Ödeme</span>`;
+  const stBadge = (s) => s === 'odendi'
+    ? `<span class="badge badge--green">Ödendi</span>`
+    : `<span class="badge badge--accent">Bekliyor</span>`;
+
+  $('#content').innerHTML = `
+    <div class="grid grid--stats" style="margin-bottom:16px">
+      ${stat('💰','tint-green', fmtTLlong(collected), 'Tahsil Edilen', '')}
+      ${stat('💸','tint-yellow', fmtTLlong(paidOut), 'Yapılan Ödeme', '')}
+      ${stat('📈','tint-brand', fmtTLlong(net), 'Net Nakit Akışı', '')}
+      ${stat('⏳','tint-accent', fmtTLlong(pendingIn), 'Bekleyen Tahsilat', pendingOut ? ('Bekleyen ödeme: ' + fmtTL(pendingOut)) : '')}
+    </div>
+    <div class="page-actions">
+      <div class="chips">
+        <button class="chip-btn ${App._finDir==='all'?'active':''}" onclick="setFinDir('all')">Tümü <span style="opacity:.7">${pays.length}</span></button>
+        <button class="chip-btn ${App._finDir==='in'?'active':''}" onclick="setFinDir('in')">↓ Tahsilat</button>
+        <button class="chip-btn ${App._finDir==='out'?'active':''}" onclick="setFinDir('out')">↑ Ödeme</button>
+      </div>
+      <div class="spacer"></div>
+      <div class="chips">
+        <button class="chip-btn ${App._finStatus==='all'?'active':''}" onclick="setFinStatus('all')">Hepsi</button>
+        <button class="chip-btn ${App._finStatus==='odendi'?'active':''}" onclick="setFinStatus('odendi')">Ödendi</button>
+        <button class="chip-btn ${App._finStatus==='bekliyor'?'active':''}" onclick="setFinStatus('bekliyor')">Bekliyor</button>
+      </div>
+    </div>
+    <div class="card"><div class="card__body" style="padding:8px">
+      ${list.length ? `<div class="table-wrap"><table class="tbl">
+        <thead><tr><th>Tarih</th><th>Yön</th><th>Kategori</th><th>Proje</th><th>Taraf</th><th>Yöntem</th><th>Durum</th><th style="text-align:right">Tutar</th></tr></thead>
+        <tbody>${list.map(p => {
+          const proj = Store.projectById(p.projectId);
+          return `<tr>
+            <td class="muted" style="white-space:nowrap">${fmtDate(p.date)}</td>
+            <td>${dirBadge(p.dir)}</td>
+            <td><b>${escapeHtml(p.category)}</b>${p.note ? `<div class="cell-sub">${escapeHtml(p.note)}</div>` : ''}</td>
+            <td>${proj ? escapeHtml(proj.name) : '—'}${proj ? `<div class="cell-sub">${proj.code}</div>` : ''}</td>
+            <td>${escapeHtml(p.party)}</td>
+            <td class="muted">${escapeHtml(p.method)}</td>
+            <td>${stBadge(p.status)}</td>
+            <td style="text-align:right;white-space:nowrap;font-weight:800;color:${p.dir==='in'?'var(--green)':'var(--yellow)'}">${p.dir==='in'?'+':'−'}${fmtTL(p.amount)}</td>
+          </tr>`;
+        }).join('')}</tbody>
+      </table></div>` : emptyBox('Kayıt bulunamadı','💳')}
+    </div></div>`;
 }
 
 /* ============================================================

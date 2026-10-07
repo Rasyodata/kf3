@@ -1,7 +1,7 @@
 /* ============================================================
    SahaPro — Veri Katmanı (localStorage tabanlı)
    ============================================================ */
-const DB_KEY = 'sahapro_db_v5';
+const DB_KEY = 'sahapro_db_v6';
 const SESSION_KEY = 'sahapro_session_v1';
 
 const todayISO = (d = new Date()) => d.toISOString().slice(0, 10);
@@ -212,6 +212,24 @@ function seedData() {
     mkMat('m13','p5','ph2','İSG Ekipmanı (baret/yelek)','set', 40, 28, ''),
   ];
 
+  // ---- Finans / ödeme hareketleri (hakediş tahsilatları + tedarikçi/işçilik ödemeleri) ----
+  const payMethods = ['Havale/EFT', 'Çek', 'Nakit'];
+  const payments = [];
+  let pn = 0;
+  const mkPay = (pid, dir, cat, party, amount, date, status, method, note = '') =>
+    payments.push({ id: 'pay' + (++pn), projectId: pid, dir, category: cat, party, amount, date, status, method, note });
+  // Son hareketler: devam eden projeler + en güncel bitenler
+  projects.filter((p, i) => p.status === 'devam' || i < 14).forEach((p, i) => {
+    const active = p.status === 'devam';
+    // Gelen (tahsilat) — işverenden hakediş
+    mkPay(p.id, 'in', 'Hakediş', p.client, Math.round(p.spent * 0.5), addDays(-(18 + (i % 6) * 6)), 'odendi', payMethods[i % 3], `${p.code} dönem hakedişi`);
+    if (active) mkPay(p.id, 'in', 'Hakediş', p.client, Math.round(p.budget * 0.12), addDays((i % 4) + 2), 'bekliyor', 'Havale/EFT', 'Onay bekleyen hakediş');
+    else mkPay(p.id, 'in', 'Kesin Hesap', p.client, Math.round(p.budget * 0.10), addDays(-(30 + (i % 8) * 5)), 'odendi', payMethods[(i + 2) % 3], 'Kesin hesap kapanışı');
+    // Giden (ödeme) — tedarikçi + işçilik
+    mkPay(p.id, 'out', 'Malzeme', 'Tedarikçi', Math.round(p.spent * 0.24), addDays(-(9 + (i % 5) * 3)), 'odendi', payMethods[(i + 1) % 3], 'Demir / beton / kalıp alımı');
+    mkPay(p.id, 'out', 'İşçilik', 'Saha ekibi', Math.round(p.spent * 0.16), addDays(-(4 + (i % 4))), (active && i % 3 === 0) ? 'bekliyor' : 'odendi', 'Havale/EFT', 'Aylık işçilik / puantaj');
+  });
+
   const attendance = {};
   const workers = users.filter(u => u.role === 'calisan');
   for (let i = 1; i <= 10; i++) {
@@ -233,7 +251,7 @@ function seedData() {
     { id: 'a5', text: '<b>Murat Gençtürk</b> "Çınar İnşaat Erkilet" projesini sisteme ekledi', proj: 'Çınar İnşaat Erkilet', time: '2 gün önce', user: 'u1' },
   ];
 
-  return { users, projects, tasks, attendance, activity, materials };
+  return { users, projects, tasks, attendance, activity, materials, payments };
 }
 
 /* ---- Store ---- */
@@ -251,8 +269,9 @@ const Store = {
   // Kullanıcı / oturum
   users: () => Store.db.users,
   userById: (id) => Store.db.users.find(u => u.id === id),
-  authenticate(email, pass) {
-    const u = Store.db.users.find(x => x.email.toLowerCase() === email.toLowerCase().trim() && x.pass === pass);
+  authenticate(email) {
+    // Şifresiz giriş: yalnızca e-posta ile eşleşme
+    const u = Store.db.users.find(x => x.email.toLowerCase() === (email || '').toLowerCase().trim());
     return u || null;
   },
   getSession() { const id = localStorage.getItem(SESSION_KEY); return id ? Store.userById(id) : null; },
@@ -286,6 +305,8 @@ const Store = {
   // Malzeme / stok
   materials: () => Store.db.materials || (Store.db.materials = []),
   materialsByProject: (pid) => Store.materials().filter(m => m.projectId === pid),
+  payments: () => Store.db.payments || (Store.db.payments = []),
+  paymentsByProject: (pid) => Store.payments().filter(p => p.projectId === pid),
   materialStatus(m) {
     if (m.inStock <= 0 && m.required > 0) return 'kritik';
     if (m.inStock < m.required) return 'eksik';
