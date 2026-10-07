@@ -723,6 +723,7 @@ function renderAuth() {
           <div class="auth__roles">
             <button data-em="murat@emgimar.com"><span class="ico">🛡️</span> ${L('r_yetkili')}</button>
             <button data-em="fatih@emgimar.com"><span class="ico">👷</span> ${L('r_muhendis')}</button>
+            <button data-em="muhasebe@emgimar.com"><span class="ico">🧮</span> ${L('r_muhasebe')}</button>
             <button data-em="usta@emgimar.com"><span class="ico">🔧</span> ${L('r_calisan')}</button>
             <button data-em="uye@emgimar.com"><span class="ico">👤</span> ${L('r_uye')}</button>
           </div>
@@ -784,6 +785,23 @@ function navItems() {
       { grp: L('g_general') },
       { id: 'mytracking', icon: '📌', label: L('member_area') },
       { id: 'settings', icon: '⚙️', label: L('settings') },
+    ];
+  }
+  // Muhasebe: finans/sözleşme/rapor odaklı görünüm (salt görüntüleme)
+  if (role === 'muhasebe') {
+    return [
+      { grp: L('g_general') },
+      { id: 'dashboard', icon: '🏠', label: L('home') },
+      { id: 'ongoing',   icon: '🚧', label: L('nav_ongoing') },
+      { id: 'completed', icon: '✅', label: L('nav_completed') },
+      { id: 'projects',  icon: '🏗️', label: L('all_projects_nav') },
+      { grp: L('g_finance') },
+      { id: 'contracts', icon: '📄', label: L('contracts') },
+      { id: 'reports',   icon: '📈', label: L('reports') },
+      { id: 'materials', icon: '📦', label: L('materials') },
+      { id: 'attendance',icon: '🕐', label: L('attendance') },
+      { grp: L('g_mgmt') },
+      { id: 'settings',  icon: '⚙️', label: L('settings') },
     ];
   }
   const base = [
@@ -919,7 +937,7 @@ const isStaff = () => !!App.user && (App.user.role === 'yetkili' || App.user.rol
 function canViewProjectApp(p) {
   const u = App.user;
   if (!u || !p) return false;
-  if (u.role === 'yetkili') return true;
+  if (u.role === 'yetkili' || u.role === 'muhasebe') return true; // muhasebe tüm projelerin finansını görür
   return (p.access || []).includes(u.id);
 }
 
@@ -2350,7 +2368,7 @@ function openEmployeeModal() {
         <div class="field"><label>Telefon</label><input id="ePhone" placeholder="05xx xxx xx xx"></div>
       </div>
       <div class="form-row">
-        <div class="field"><label>Rol</label><select id="eRole"><option value="calisan">Çalışan</option><option value="muhendis">Mühendis</option><option value="yetkili">Yetkili</option></select></div>
+        <div class="field"><label>Rol</label><select id="eRole"><option value="calisan">Çalışan</option><option value="muhendis">Mühendis</option><option value="muhasebe">Muhasebe</option><option value="yetkili">Yetkili</option></select></div>
         <div class="field"><label>Ünvan</label><input id="eTitle" placeholder="Ör. Kalıp Ustası"></div>
       </div>
       <p class="muted" style="font-size:12.5px">Yeni personelin varsayılan parolası <b>1234</b> olur.</p>

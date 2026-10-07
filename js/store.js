@@ -1,7 +1,7 @@
 /* ============================================================
    SahaPro — Veri Katmanı (localStorage tabanlı)
    ============================================================ */
-const DB_KEY = 'sahapro_db_v4';
+const DB_KEY = 'sahapro_db_v5';
 const SESSION_KEY = 'sahapro_session_v1';
 
 const todayISO = (d = new Date()) => d.toISOString().slice(0, 10);
@@ -69,6 +69,7 @@ function seedData() {
     { id: 'u8', name: 'Kemal Doğan',    email: 'kemal@emgimar.com', pass: '1234', role: 'calisan',  title: 'Beton / Kalıp Ekip Başı',          phone: '0534 744 55 66', color: '#ff8a65' },
     { id: 'u9', name: 'İbrahim Yılmaz', email: 'ibrahim@emgimar.com',pass: '1234', role: 'calisan', title: 'Boya Ustası',                      phone: '0534 855 66 77', color: '#9ccc65' },
     { id: 'u10', name: 'Selim Kaya',    email: 'selim@emgimar.com', pass: '1234', role: 'calisan',  title: 'İş Makinesi Operatörü',            phone: '0534 966 77 88', color: '#ba68c8' },
+    { id: 'u12', name: 'Elif Şahin',    email: 'muhasebe@emgimar.com',pass: '1234',role: 'muhasebe', title: 'Muhasebe & Finans Sorumlusu',      phone: '0536 120 45 67', color: '#20c997' },
     { id: 'u11', name: 'Deniz Üye',     email: 'uye@emgimar.com',   pass: '1234', role: 'uye',      title: 'Üye (Proje Takip)',                phone: '0535 000 00 00', color: '#78909c' },
   ];
 
